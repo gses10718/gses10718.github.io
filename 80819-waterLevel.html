@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>APCS 裝飲料水位模擬器</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f0f8ff; }
+        .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 600px; width: 100%; margin-top: 20px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: inline-block; width: 180px; }
+        input { width: 60px; padding: 5px; }
+        button { padding: 8px 15px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 4px; }
+        button:hover { background-color: #0056b3; }
+        
+        /* 杯子視覺化 */
+        #visualization { margin-top: 30px; display: flex; flex-direction: column; align-items: center; height: 300px; position: relative; }
+        .cup-part { border: 2px solid #333; border-top: none; position: relative; overflow: hidden; background-color: #fff; }
+        .water { background-color: rgba(0, 191, 255, 0.6); width: 100%; position: absolute; bottom: 0; transition: height 0.5s ease-out; }
+        
+        #stats { margin-top: 20px; border-top: 1px solid #ddd; padding-top: 10px; }
+        .highlight { color: #d9534f; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>裝飲料水位變化模擬</h2>
+    <p>根據 APCS o711 題目規則：杯子由兩個長方體組成 [1]。</p>
+    
+    <div class="input-group">
+        <label>下層 (w1 x w1, h1):</label>
+        寬 <input type="number" id="w1" value="10"> 高 <input type="number" id="h1" value="50">
+    </div>
+    <div class="input-group">
+        <label>上層 (w2 x w2, h2):</label>
+        寬 <input type="number" id="w2" value="5"> 高 <input type="number" id="h2" value="50">
+    </div>
+    <button onclick="setupCup()">設定杯子尺寸</button>
+
+    <hr>
+    
+    <div class="input-group">
+        <label>每次加入水量 (v):</label>
+        <input type="number" id="v_input" value="100">
+        <button onclick="pourWater()">倒水！</button>
+        <button onclick="reset()">重置</button>
+    </div>
+
+    <div id="visualization">
+        <div id="cup_top" class="cup-part"><div id="water_top" class="water"></div></div>
+        <div id="cup_bottom" class="cup-part"><div id="water_bottom" class="water"></div></div>
+    </div>
+
+    <div id="stats">
+        <p>當前總高度: <span id="curr_h">0</span> cm</p>
+        <p>本次上升高度: <span id="delta_h" class="highlight">0</span> cm</p>
+        <p>累計最大上升量: <span id="max_delta" class="highlight">0</span> cm</p>
+    </div>
+</div>
+
+<script>
+    let w1, w2, h1, h2;
+    let currentVol = 0;
+    let prevHeight = 0;
+    let maxDelta = 0;
+
+    function setupCup() {
+        w1 = parseFloat(document.getElementById('w1').value);
+        h1 = parseFloat(document.getElementById('h1').value);
+        w2 = parseFloat(document.getElementById('w2').value);
+        h2 = parseFloat(document.getElementById('h2').value);
+        
+        // 調整視覺比例 (乘以2以方便觀察)
+        const scale = 2;
+        const ct = document.getElementById('cup_top');
+        const cb = document.getElementById('cup_bottom');
+        
+        cb.style.width = (w1 * scale) + 'px';
+        cb.style.height = (h1 * scale) + 'px';
+        ct.style.width = (w2 * scale) + 'px';
+        ct.style.height = (h2 * scale) + 'px';
+        
+        reset();
+    }
+
+    function calculateHeight(volume) {
+        const v_bottom_max = w1 * w1 * h1;
+        const v_top_max = w2 * w2 * h2;
+        
+        if (volume <= v_bottom_max) {
+            return volume / (w1 * w1);
+        } else if (volume <= v_bottom_max + v_top_max) {
+            return h1 + (volume - v_bottom_max) / (w2 * w2);
+        } else {
+            return h1 + h2; // 杯子滿了，水位不再上升 [1]
+        }
+    }
+
+    function pourWater() {
+        const v = parseFloat(document.getElementById('v_input').value);
+        const maxVol = (w1 * w1 * h1) + (w2 * w2 * h2);
+        
+        currentVol += v;
+        if (currentVol > maxVol) currentVol = maxVol;
+
+        const newHeight = calculateHeight(currentVol);
+        const delta = newHeight - prevHeight;
+        
+        if (delta > maxDelta) maxDelta = delta;
+
+        updateUI(newHeight, delta);
+        prevHeight = newHeight;
+    }
+
+    function updateUI(h, delta) {
+        document.getElementById('curr_h').innerText = h.toFixed(2);
+        document.getElementById('delta_h').innerText = delta.toFixed(2);
+        document.getElementById('max_delta').innerText = maxDelta.toFixed(2);
+
+        const wb = document.getElementById('water_bottom');
+        const wt = document.getElementById('water_top');
+        const scale = 100 / Math.max(h1, 0.1); // 百分比顯示
+
+        if (h <= h1) {
+            wb.style.height = (h / h1 * 100) + '%';
+            wt.style.height = '0%';
+        } else {
+            wb.style.height = '100%';
+            wt.style.height = ((h - h1) / h2 * 100) + '%';
+        }
+    }
+
+    function reset() {
+        currentVol = 0;
+        prevHeight = 0;
+        maxDelta = 0;
+        document.getElementById('water_bottom').style.height = '0%';
+        document.getElementById('water_top').style.height = '0%';
+        updateUI(0, 0);
+    }
+
+    // 初始化
+    setupCup();
+</script>
+
+</body>
+</html>
